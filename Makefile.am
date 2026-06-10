@@ -200,6 +200,12 @@ cpuminer_SOURCES = \
   algo/sm3/sm3-hash-4way.c \
   algo/swifftx/swifftx.c \
   algo/tiger/sph_tiger.c \
+  algo/verus/verus-gate.c \
+  algo/verus/verus-stubs.cpp \
+  algo/verus/verusscan.cpp \
+  algo/verus/haraka.c \
+  algo/verus/haraka_portable.c \
+  algo/verus/verus_clhash_portable.cpp \
   algo/verthash/verthash-gate.c \
   algo/verthash/Verthash.c \
   algo/verthash/fopen_utf8.c \
@@ -309,9 +315,11 @@ cpuminer_LDFLAGS = @LDFLAGS@
 cpuminer_LDADD	= $(EXTRA_LIBS) @LIBCURL@ -ljansson @PTHREAD_LIBS@ @WS2_LIBS@ -lgmp
 cpuminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ $(ALL_INCLUDES)
 cpuminer_CFLAGS = -Wno-pointer-sign -Wno-pointer-to-int-cast $(disable_flags)
+cpuminer_CXXFLAGS = $(cpuminer_CFLAGS) -std=c++11
 
 if ARCH_ARM64
-   cpuminer_CFLAGS += -flax-vector-conversions
+   cpuminer_CFLAGS += -flax-vector-conversions -march=armv8-a+crypto
+   cpuminer_CXXFLAGS += -flax-vector-conversions -march=armv8-a+crypto
 endif
 
 if HAVE_WINDOWS

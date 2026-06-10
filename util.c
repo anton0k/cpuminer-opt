@@ -1691,18 +1691,38 @@ static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, i
 {
 	const char* xnonce1;
 	int xn2_size;
+	int xn1_size;
 
 	xnonce1 = json_string_value(json_array_get(params, pndx));
 	if (!xnonce1) {
 		applog(LOG_ERR, "Failed to get extranonce1");
 		goto out;
 	}
-	xn2_size = (int) json_integer_value(json_array_get(params, pndx+1));
-	if (!xn2_size) {
-		applog(LOG_ERR, "Failed to get extranonce2_size");
+	if (strlen(xnonce1) & 1) {
+		applog(LOG_ERR, "Failed to get valid extranonce1");
 		goto out;
 	}
-	if (xn2_size < 2 || xn2_size > 16) {
+	xn1_size = (int) strlen(xnonce1) / 2;
+	xn2_size = (int) json_integer_value(json_array_get(params, pndx+1));
+	if (!xn2_size) {
+		if (opt_algo == ALGO_VERUS) {
+			xn2_size = 32 - xn1_size;
+			if (xn1_size < 3 || xn1_size > 12) {
+				applog(LOG_ERR, "Unsupported Verus extranonce size of %d", xn1_size);
+				goto out;
+			}
+		} else {
+			applog(LOG_ERR, "Failed to get extranonce2_size");
+			goto out;
+		}
+	}
+	if (opt_algo == ALGO_VERUS) {
+		if (xn1_size < 3 || xn1_size > 12 || xn2_size < 1 || xn2_size > 32) {
+			applog(LOG_ERR, "Failed to get valid Verus extranonce sizes (%d/%d)",
+			       xn1_size, xn2_size);
+			goto out;
+		}
+	} else if (xn2_size < 2 || xn2_size > 16) {
 		applog(LOG_INFO, "Failed to get valid n2size in parse_extranonce");
 		goto out;
 	}
@@ -1710,14 +1730,21 @@ static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, i
 	pthread_mutex_lock(&sctx->work_lock);
 	if (sctx->xnonce1)
 		free(sctx->xnonce1);
-	sctx->xnonce1_size = strlen(xnonce1) / 2;
+	sctx->xnonce1_size = xn1_size;
 	sctx->xnonce1 = (uchar*) calloc(1, sctx->xnonce1_size);
 	if (unlikely(!sctx->xnonce1)) {
 		applog(LOG_ERR, "Failed to alloc xnonce1");
 		pthread_mutex_unlock(&sctx->work_lock);
 		goto out;
 	}
-	hex2bin(sctx->xnonce1, xnonce1, sctx->xnonce1_size);
+	if (!hex2bin(sctx->xnonce1, xnonce1, sctx->xnonce1_size)) {
+		applog(LOG_ERR, "Failed to decode extranonce1");
+		free(sctx->xnonce1);
+		sctx->xnonce1 = NULL;
+		sctx->xnonce1_size = 0;
+		pthread_mutex_unlock(&sctx->work_lock);
+		goto out;
+	}
 	sctx->xnonce2_size = xn2_size;
 	pthread_mutex_unlock(&sctx->work_lock);
 
@@ -1962,6 +1989,79 @@ static uint32_t getblocheight(struct stratum_ctx *sctx)
 
 static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 {
+   if ( opt_algo == ALGO_VERUS )
+   {
+      const char *job_id, *version, *prevhash, *coinb1, *coinb2;
+      const char *stime, *nbits, *solution;
+      size_t solution_len;
+      bool clean;
+
+      if ( !params || !json_is_array(params) || json_array_size(params) < 9 )
+      {
+         applog(LOG_ERR, "Verus notify: invalid parameter count");
+         return false;
+      }
+
+      job_id = json_string_value(json_array_get(params, 0));
+      version = json_string_value(json_array_get(params, 1));
+      prevhash = json_string_value(json_array_get(params, 2));
+      coinb1 = json_string_value(json_array_get(params, 3));
+      coinb2 = json_string_value(json_array_get(params, 4));
+      stime = json_string_value(json_array_get(params, 5));
+      nbits = json_string_value(json_array_get(params, 6));
+      clean = json_is_true(json_array_get(params, 7));
+      solution = json_string_value(json_array_get(params, 8));
+      solution_len = solution ? strlen(solution) : 0;
+
+      if ( !job_id || !version || !prevhash || !coinb1 || !coinb2
+        || !stime || !nbits || !solution
+        || strlen(version) != 8 || strlen(prevhash) != 64
+        || strlen(coinb1) != 64 || strlen(coinb2) != 64
+        || strlen(stime) != 8 || strlen(nbits) != 8
+        || (solution_len & 1) || solution_len > 1344 * 2 )
+      {
+         applog(LOG_ERR, "Verus notify: invalid parameters");
+         return false;
+      }
+
+      pthread_mutex_lock(&sctx->work_lock);
+
+      sctx->job.coinbase_size = 64;
+      sctx->job.coinbase = (uchar*)realloc(sctx->job.coinbase,
+                                           sctx->job.coinbase_size);
+      if ( !sctx->job.coinbase )
+      {
+         pthread_mutex_unlock(&sctx->work_lock);
+         applog(LOG_ERR, "Verus notify: coinbase allocation failed");
+         return false;
+      }
+
+      if ( !hex2bin(sctx->job.version, version, 4)
+        || !hex2bin(sctx->job.prevhash, prevhash, 32)
+        || !hex2bin(sctx->job.coinbase, coinb1, 32)
+        || !hex2bin(sctx->job.coinbase + 32, coinb2, 32)
+        || !hex2bin(sctx->job.ntime, stime, 4)
+        || !hex2bin(sctx->job.nbits, nbits, 4)
+        || !hex2bin(sctx->job.verus_solution, solution, 1344) )
+      {
+         pthread_mutex_unlock(&sctx->work_lock);
+         applog(LOG_ERR, "Verus notify: hex decode failed");
+         return false;
+      }
+
+      sctx->job.xnonce2 = sctx->job.coinbase + 32;
+      sctx->job.merkle_count = 0;
+      sctx->block_height = 0;
+      sctx->job.clean = clean;
+      sctx->job.diff = sctx->next_diff > 0.0 ? sctx->next_diff : 1.0;
+
+      free(sctx->job.job_id);
+      sctx->job.job_id = strdup(job_id);
+
+      pthread_mutex_unlock(&sctx->work_lock);
+      return true;
+   }
+
 	const char *job_id, *prevhash, *coinb1, *coinb2, *version, *nbits, *stime;
    const char *finalsaplinghash = NULL;
    const char *denom10 = NULL, *denom100 = NULL, *denom1000 = NULL,
@@ -2136,6 +2236,28 @@ static bool stratum_set_difficulty(struct stratum_ctx *sctx, json_t *params)
 	sctx->next_diff = diff;
 	pthread_mutex_unlock(&sctx->work_lock);
 	return true;
+}
+
+static bool stratum_set_target(struct stratum_ctx *sctx, json_t *params)
+{
+   const char *target;
+
+   if (!params || !json_is_array(params))
+      return false;
+
+   target = json_string_value(json_array_get(params, 0));
+   if (!target || strlen(target) != 64)
+      return false;
+
+   pthread_mutex_lock(&sctx->work_lock);
+   if (!hex2bin(sctx->job.verus_target, target, 32))
+   {
+      pthread_mutex_unlock(&sctx->work_lock);
+      return false;
+   }
+   sctx->job.verus_have_target = true;
+   pthread_mutex_unlock(&sctx->work_lock);
+   return true;
 }
 
 static bool stratum_reconnect(struct stratum_ctx *sctx, json_t *params)
@@ -2444,6 +2566,10 @@ bool stratum_handle_method(struct stratum_ctx *sctx, const char *s)
 		ret = stratum_set_difficulty(sctx, params);
 		goto out;
 	}
+   if (opt_algo == ALGO_VERUS && !strcasecmp(method, "mining.set_target")) {
+      ret = stratum_set_target(sctx, params);
+      goto out;
+   }
 	if (!strcasecmp(method, "mining.set_extranonce")) {
 		ret = stratum_parse_extranonce(sctx, params, 0);
 		goto out;

@@ -56,6 +56,10 @@
 #include <jansson.h>
 #include <curl/curl.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef STDC_HEADERS
 # include <stdlib.h>
 # include <stddef.h>
@@ -326,7 +330,9 @@ struct thr_api {
 #define JSON_RPC_QUIET_404	(1 << 1)
 #define JSON_RPC_IGNOREERR  (1 << 2)
 
-#define JSON_BUF_LEN 512
+#define JSON_BUF_LEN 4096
+#define MAX_GPUS 80
+#define MAX_NONCES 2
 
 #define CL_N    "\x1B[0m"
 #define CL_RED  "\x1B[31m"
@@ -405,6 +411,8 @@ extern double nbits_to_diff( uint32_t );
 
 double hash_target_ratio( uint32_t* hash, uint32_t* target );
 void   work_set_target_ratio( struct work* work, const void *hash );
+void   bn_store_hash_target_ratio( uint32_t *hash, uint32_t *target,
+                                   struct work *work, int nonce );
 
 struct thr_info {
         int id;
@@ -456,6 +464,11 @@ struct work
 	unsigned char *xnonce2;
    bool sapling;
    bool stale;
+   uint8_t valid_nonces;
+   uint8_t submit_nonce_id;
+   uint32_t nonces[MAX_NONCES];
+   uint8_t extra[1388];
+   unsigned char solution[1344];
 } __attribute__ ((aligned (WORK_ALIGNMENT)));
 
 struct stratum_job
@@ -481,6 +494,9 @@ struct stratum_job
    unsigned char denom1000[32];
    unsigned char denom10000[32];
    unsigned char proofoffullnode[32];
+   unsigned char verus_solution[1344];
+   unsigned char verus_target[32];
+   bool verus_have_target;
 
 } __attribute__ ((aligned (64)));
 
@@ -639,6 +655,7 @@ enum algos {
         ALGO_TRIBUS,
         ALGO_VANILLA,
         ALGO_VELTOR,
+        ALGO_VERUS,
         ALGO_VERTHASH,
         ALGO_WHIRLPOOL,
         ALGO_WHIRLPOOLX,
@@ -736,6 +753,7 @@ static const char* const algo_names[] = {
         "tribus",
         "vanilla",
         "veltor",
+        "verus",
         "verthash",
         "whirlpool",
         "whirlpoolx",
@@ -900,6 +918,7 @@ Options:\n\
                           tribus        Denarius (DNR)\n\
                           vanilla       blake256r8vnl (VCash)\n\
                           veltor\n\
+                          verus         VerusHash (VRSC)\n\
                           verthash\n\
                           whirlpool\n\
                           whirlpoolx\n\
@@ -1058,6 +1077,10 @@ static struct option const options[] = {
         { 0, 0, 0, 0 }
 };
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __MINER_H__ */
 

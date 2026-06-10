@@ -108,6 +108,15 @@ if test -n "$with_curl" ; then
    LIBCURL_CPPFLAGS="$LIBCURL_CPPFLAGS -I$with_curl/include"
    LIBCURL_LDFLAGS="-L$with_curl/lib $LIBCURL_LDFLAGS"
    LIBCURL="-lcurl -lz"
+else
+   AC_PATH_PROG([CURL_CONFIG], [curl-config])
+   if test -n "$CURL_CONFIG" ; then
+      LIBCURL_CFLAGS="$LIBCURL_CFLAGS `$CURL_CONFIG --cflags`"
+      LIBCURL_CPPFLAGS="$LIBCURL_CPPFLAGS `$CURL_CONFIG --cflags`"
+      LIBCURL="$LIBCURL `$CURL_CONFIG --libs`"
+   else
+      LIBCURL="-lcurl"
+   fi
 fi
 
 CFLAGS="$CFLAGS $LIBCURL_CFLAGS"

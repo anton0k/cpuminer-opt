@@ -351,6 +351,7 @@ bool register_algo_gate( int algo, algo_gate_t *gate )
     case ALGO_TRIBUS:       rc = register_tribus_algo        ( gate ); break;
     case ALGO_VANILLA:      rc = register_vanilla_algo       ( gate ); break;
     case ALGO_VELTOR:       rc = register_veltor_algo        ( gate ); break;
+    case ALGO_VERUS:        rc = register_verus_algo         ( gate ); break;
     case ALGO_VERTHASH:     rc = register_verthash_algo      ( gate ); break;
     case ALGO_WHIRLPOOL:    rc = register_whirlpool_algo     ( gate ); break;
     case ALGO_WHIRLPOOLX:   rc = register_whirlpoolx_algo    ( gate ); break;
@@ -440,6 +441,7 @@ const char* const algo_alias_map[][2] =
   { "sib",               "x11gost"        },
   { "timetravel8",       "timetravel"     },
   { "veil",              "x16rt-veil"     },
+  { "verushash",         "verus"          },
   { "x16r-hex",          "hex"            },
   { "yenten",            "yescryptr16"    },
   { "ziftr",             "zr5"            },

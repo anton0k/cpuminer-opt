@@ -2020,7 +2020,8 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
    algo_gate.build_extraheader( g_work, sctx );
    net_diff = nbits_to_diff( g_work->data[ algo_gate.nbits_index ] );
    algo_gate.set_work_data_endian( g_work );
-   diff_to_hash( g_work->target, g_work->targetdiff );
+   if ( opt_algo != ALGO_VERUS )
+      diff_to_hash( g_work->target, g_work->targetdiff );
 
    g_work_time = time(NULL);
    restart_threads();
@@ -2028,9 +2029,10 @@ static void stratum_gen_work( struct stratum_ctx *sctx, struct work *g_work )
 
    // Pre increment extranonce2 in case of being called again before receiving
    // a new job
-   for ( int t = 0;
-         t < sctx->xnonce2_size && !( ++sctx->job.xnonce2[t] );
-         t++ );
+   if ( opt_algo != ALGO_VERUS )
+      for ( int t = 0;
+            t < sctx->xnonce2_size && !( ++sctx->job.xnonce2[t] );
+            t++ );
 
    pthread_mutex_unlock( &sctx->work_lock );
 
