@@ -467,6 +467,7 @@ struct work
    uint8_t valid_nonces;
    uint8_t submit_nonce_id;
    uint32_t nonces[MAX_NONCES];
+   uint32_t submit_hashes[MAX_NONCES][8] __attribute__ ((aligned (64)));
    uint8_t extra[1388];
    unsigned char solution[1344];
 } __attribute__ ((aligned (WORK_ALIGNMENT)));

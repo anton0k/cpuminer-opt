@@ -92,6 +92,7 @@ void verus_get_new_work(struct work *work, struct work *g_work, int thr_id,
                     | (uint32_t)(thr_id & 0xff);
    work->valid_nonces = 0;
    work->submit_nonce_id = 0;
+   memset(work->submit_hashes, 0, sizeof(work->submit_hashes));
    *end_nonce_ptr = 0xffffffffU;
 }
 
@@ -184,6 +185,7 @@ int verus_scanhash(struct work *work, uint32_t max_nonce,
 
    work->valid_nonces = 0;
    work->submit_nonce_id = 0;
+   memset(work->submit_hashes, 0, sizeof(work->submit_hashes));
 
    hits = scanhash_verus(thr_id, work, VERUS_SCAN_WINDOW, &done);
    *hashes_done = done;
@@ -192,7 +194,7 @@ int verus_scanhash(struct work *work, uint32_t max_nonce,
    {
       work->submit_nonce_id = 0;
       work->data[VERUS_NONCE_INDEX] = work->nonces[0];
-      submit_solution(work, work->target, mythr);
+      submit_solution(work, work->submit_hashes[0], mythr);
    }
 
    return 0;

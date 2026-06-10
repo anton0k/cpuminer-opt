@@ -229,14 +229,16 @@ extern "C" int scanhash_verus(int thr_id, struct work *work, uint32_t max_nonce,
 
 		if (vhash[7] <= Htarg )
 		{
-			work->valid_nonces++;
+			if (work->valid_nonces >= MAX_NONCES)
+				goto out;
+
+			int nonce = work->valid_nonces++;
 			memcpy(work->data, full_data, 140);
-			int nonce = work->valid_nonces - 1;
 			memcpy(work->extra, sol_data, 1347);
 			memcpy(work->extra + 1332, nonceSpace, 15);  //copy in the valid nonce 15 bytes to the solution part
 			bn_store_hash_target_ratio(vhash, work->target, work, nonce);
 
-			work->nonces[work->valid_nonces - 1] = ((uint32_t*)full_data)[NONCE_OFT];
+			work->nonces[nonce] = ((uint32_t*)full_data)[NONCE_OFT];
 			//pdata[NONCE_OFT] = endiandata[NONCE_OFT] + 1;
 			goto out;
 		}
